@@ -57,28 +57,39 @@ static void MX_GPIO_Init(void);
 
 /* Private user code ---------------------------------------------------------*/
 /* USER CODE BEGIN 0 */
-static void Task1_EntryFunc(void* parameters)
+
+static void Task1_HandleGreenLED(void* parameters)
 {
-	char buf[100];
 	while(1)
 	{
-		snprintf(buf,100,"%s",(char*)parameters);
-		SEGGER_SYSVIEW_PrintfTarget(buf);
-		taskYIELD();
+		SEGGER_SYSVIEW_PrintfTarget("Toggle Green LED");
+		HAL_GPIO_TogglePin(GPIOD, LD3_Pin);
+		vTaskDelay(pdMS_TO_TICKS(100));
+
 	}
 
 
 }
 
-static void Task2_EntryFunc(void* parameters)
+static void Task2_HandleOrangeLED(void* parameters)
 {
-	char buf[100];
 	while(1)
 	{
+		SEGGER_SYSVIEW_PrintfTarget("Toggle Orange LED");
+		HAL_GPIO_TogglePin(GPIOD, LD4_Pin);
+		vTaskDelay(pdMS_TO_TICKS(800));
 
-		snprintf(buf,100,"%s",(char*)parameters);
-		SEGGER_SYSVIEW_PrintfTarget(buf);
-		taskYIELD();
+	}
+}
+
+static void Task3_HandleRedLED(void* parameters)
+{
+	while(1)
+	{
+		SEGGER_SYSVIEW_PrintfTarget("Toggle Red LED");
+		HAL_GPIO_TogglePin(GPIOD, LD5_Pin);
+		vTaskDelay(pdMS_TO_TICKS(1000));
+
 	}
 }
 /* USER CODE END 0 */
@@ -120,22 +131,30 @@ int main(void)
   SEGGER_SYSVIEW_Conf();
   //SEGGER_SYSVIEW_Start();
   TaskHandle_t task1_Handle, task2_Handle;
-  BaseType_t task1_ret, task2_ret;
-  task1_ret =  xTaskCreate( 	Task1_EntryFunc,
-  							"Task1",
+  BaseType_t task1_ret, task2_ret, task3_ret;
+  task1_ret =  xTaskCreate( 	Task1_HandleGreenLED,
+  							"Task1_GREEN_LED",
 								1000u,
-								"Hello World from Task 1\n",
+								NULL,
 								configMAX_PRIORITIES -1,
 								&task1_Handle );
   configASSERT(task1_ret == pdPASS);
 
-  task2_ret =  xTaskCreate( 	Task2_EntryFunc,
-  							"Task2",
+  task2_ret =  xTaskCreate( 	Task2_HandleOrangeLED,
+  							"Task2_ORANGE_LED",
 								1000u,
-								"Hello World from Task 2\n",
+								NULL,
 								configMAX_PRIORITIES -1,
 								&task2_Handle );
   configASSERT(task2_ret == pdPASS);
+
+  task3_ret =  xTaskCreate( 	Task3_HandleRedLED,
+  							"Task3_RED_LED",
+								1000u,
+								NULL,
+								configMAX_PRIORITIES -1,
+								&task2_Handle );
+  configASSERT(task3_ret == pdPASS);
 
   vTaskStartScheduler();
 
