@@ -64,10 +64,26 @@ static void MX_GPIO_Init(void);
  void HAL_GPIO_EXTI_Callback(uint16_t GPIO_Pin)
 {
 	 traceISR_ENTER();
-	 if(GPIO_Pin == GPIO_PIN_0){
-		 if(nextHandle){
-			 xTaskNotifyFromISR(nextHandle,0,eNoAction,NULL);
-		 }
+	 static uint32_t msecCount = 0;
+	 if(msecCount == 0u){
+		 msecCount = HAL_GetTick();
+	 }
+	 else{
+		if( HAL_GetTick() - msecCount > 100){
+			if(nextHandle){
+				BaseType_t xHigherPriorityTaskWoken;
+				xTaskNotifyFromISR(nextHandle,0,eNoAction,&xHigherPriorityTaskWoken);
+				portYIELD_FROM_ISR(xHigherPriorityTaskWoken);
+			}
+			else{
+				xTaskResumeFromISR(task_GreenLEDHandle);
+				xTaskResumeFromISR(task_OrangeLEDHandle);
+				xTaskResumeFromISR(task_RedLEDHandle);
+				nextHandle = task_GreenLEDHandle;
+			}
+
+		}
+		msecCount = 0;
 	 }
 	 traceISR_EXIT();
 }
