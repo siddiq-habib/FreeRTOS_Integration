@@ -48,7 +48,7 @@
 #define DWT_CTRL (* (volatile uint32_t*)0xE0001000)
 
 static TaskHandle_t nextHandle = NULL;
-static TaskHandle_t task_GreenLEDHandle, task_OrangeLEDHandle, task_RedLEDHandle, task4_Handle;
+static TaskHandle_t task_GreenLEDHandle, task_OrangeLEDHandle, task_RedLEDHandle;
 /* USER CODE END PV */
 
 /* Private function prototypes -----------------------------------------------*/
@@ -61,17 +61,33 @@ static void MX_GPIO_Init(void);
 /* Private user code ---------------------------------------------------------*/
 /* USER CODE BEGIN 0 */
 
+ void HAL_GPIO_EXTI_Callback(uint16_t GPIO_Pin)
+{
+	 traceISR_ENTER();
+	 if(GPIO_Pin == GPIO_PIN_0){
+		 if(nextHandle){
+			 xTaskNotifyFromISR(nextHandle,0,eNoAction,NULL);
+		 }
+	 }
+	 traceISR_EXIT();
+}
+
+
 static void Task1_HandleGreenLED(void* parameters)
 {
 	while(1)
 	{
+
 		SEGGER_SYSVIEW_PrintfTarget("Toggle Green LED");
 		HAL_GPIO_TogglePin(GPIOD, LD4_Pin);
 		BaseType_t buttonPressNotified = xTaskNotifyWait(0,0,NULL,pdMS_TO_TICKS(100));
 		if(buttonPressNotified)
 		{
 			HAL_GPIO_WritePin(GPIOD, LD4_Pin, GPIO_PIN_SET);
+			portENTER_CRITICAL();
+			SEGGER_SYSVIEW_PrintfTarget("Suspend Green LED task");
 			nextHandle = task_OrangeLEDHandle;
+			portEXIT_CRITICAL();
 			vTaskSuspend(NULL);
 		}
 
@@ -91,7 +107,10 @@ static void Task2_HandleOrangeLED(void* parameters)
 		if(buttonPressNotified)
 		{
 			HAL_GPIO_WritePin(GPIOD, LD3_Pin, GPIO_PIN_SET);
+			portENTER_CRITICAL();
+			SEGGER_SYSVIEW_PrintfTarget("Suspend Orange LED task");
 			nextHandle = task_RedLEDHandle;
+			portEXIT_CRITICAL();
 			vTaskSuspend(NULL);
 		}
 
@@ -108,39 +127,15 @@ static void Task3_HandleRedLED(void* parameters)
 		if(buttonPressNotified)
 		{
 			HAL_GPIO_WritePin(GPIOD, LD5_Pin, GPIO_PIN_SET);
+			portENTER_CRITICAL();
+			SEGGER_SYSVIEW_PrintfTarget("Suspend Red LED task");
 			nextHandle = NULL;
+			portEXIT_CRITICAL();
 			vTaskSuspend(NULL);
 		}
 	}
 }
 
-
-static void Task4_HandleButtonPress(void* parameters)
-{
-	nextHandle = task_GreenLEDHandle;
-	while(1)
-	{
-		uint8_t buttonPressed = HAL_GPIO_ReadPin(GPIOA, GPIO_PIN_0);
-		if(buttonPressed){
-			vTaskDelay(pdMS_TO_TICKS(200));
-			buttonPressed = HAL_GPIO_ReadPin(GPIOA, GPIO_PIN_0);
-			if(!buttonPressed)
-			{
-				if(nextHandle)
-				{
-					xTaskNotify(nextHandle, 0, eNoAction);
-				}
-				else{
-					vTaskResume(task_GreenLEDHandle);
-					vTaskResume(task_RedLEDHandle);
-					vTaskResume(task_OrangeLEDHandle);
-					nextHandle = task_GreenLEDHandle;
-				}
-			}
-		}
-		vTaskDelay(pdMS_TO_TICKS(10));
-	}
-}
 /* USER CODE END 0 */
 
 /**
@@ -180,7 +175,7 @@ int main(void)
   SEGGER_SYSVIEW_Conf();
   //SEGGER_SYSVIEW_Start();
 
-  BaseType_t task1_ret, task2_ret, task3_ret, task4_ret;
+  BaseType_t task1_ret, task2_ret, task3_ret;
   task1_ret =  xTaskCreate( 	Task1_HandleGreenLED,
   								"Task1_GREEN_LED",
 								1000u,
@@ -188,7 +183,7 @@ int main(void)
 								configMAX_PRIORITIES -2,
 								&task_GreenLEDHandle );
   configASSERT(task1_ret == pdPASS);
-
+  nextHandle = task_GreenLEDHandle;
   task2_ret =  xTaskCreate( 	Task2_HandleOrangeLED,
   								"Task2_ORANGE_LED",
 								1000u,
@@ -205,13 +200,13 @@ int main(void)
 								&task_RedLEDHandle );
   configASSERT(task3_ret == pdPASS);
 
-  task4_ret =  xTaskCreate( 	Task4_HandleButtonPress,
-    							"Task4_BUTTON_TASK",
-  								1000u,
-  								NULL,
-  								configMAX_PRIORITIES -1,
-  								&task4_Handle );
-    configASSERT(task4_ret == pdPASS);
+//  task4_ret =  xTaskCreate( 	Task4_HandleButtonPress,
+//    							"Task4_BUTTON_TASK",
+//  								1000u,
+//  								NULL,
+//  								configMAX_PRIORITIES -1,
+//  								&task4_Handle );
+//    configASSERT(task4_ret == pdPASS);
 
   vTaskStartScheduler();
 
@@ -327,7 +322,7 @@ static void MX_GPIO_Init(void)
 
   /*Configure GPIO pin : B1_Pin */
   GPIO_InitStruct.Pin = B1_Pin;
-  GPIO_InitStruct.Mode = GPIO_MODE_IT_RISING;
+  GPIO_InitStruct.Mode = GPIO_MODE_IT_FALLING;
   GPIO_InitStruct.Pull = GPIO_NOPULL;
   HAL_GPIO_Init(B1_GPIO_Port, &GPIO_InitStruct);
 
@@ -411,6 +406,10 @@ static void MX_GPIO_Init(void)
   GPIO_InitStruct.Mode = GPIO_MODE_EVT_RISING;
   GPIO_InitStruct.Pull = GPIO_NOPULL;
   HAL_GPIO_Init(MEMS_INT2_GPIO_Port, &GPIO_InitStruct);
+
+  /* EXTI interrupt init*/
+  HAL_NVIC_SetPriority(EXTI0_IRQn, 6, 0);
+  HAL_NVIC_EnableIRQ(EXTI0_IRQn);
 
 /* USER CODE BEGIN MX_GPIO_Init_2 */
 /* USER CODE END MX_GPIO_Init_2 */
