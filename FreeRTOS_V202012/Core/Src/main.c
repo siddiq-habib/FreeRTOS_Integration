@@ -46,6 +46,9 @@
 
 /* USER CODE BEGIN PV */
 #define DWT_CTRL (* (volatile uint32_t*)0xE0001000)
+
+static TaskHandle_t nextHandle = NULL;
+static TaskHandle_t task_GreenLEDHandle, task_OrangeLEDHandle, task_RedLEDHandle, task4_Handle;
 /* USER CODE END PV */
 
 /* Private function prototypes -----------------------------------------------*/
@@ -63,8 +66,14 @@ static void Task1_HandleGreenLED(void* parameters)
 	while(1)
 	{
 		SEGGER_SYSVIEW_PrintfTarget("Toggle Green LED");
-		HAL_GPIO_TogglePin(GPIOD, LD3_Pin);
-		vTaskDelay(pdMS_TO_TICKS(100));
+		HAL_GPIO_TogglePin(GPIOD, LD4_Pin);
+		BaseType_t buttonPressNotified = xTaskNotifyWait(0,0,NULL,pdMS_TO_TICKS(100));
+		if(buttonPressNotified)
+		{
+			HAL_GPIO_WritePin(GPIOD, LD4_Pin, GPIO_PIN_SET);
+			nextHandle = task_OrangeLEDHandle;
+			vTaskSuspend(NULL);
+		}
 
 	}
 
@@ -76,8 +85,15 @@ static void Task2_HandleOrangeLED(void* parameters)
 	while(1)
 	{
 		SEGGER_SYSVIEW_PrintfTarget("Toggle Orange LED");
-		HAL_GPIO_TogglePin(GPIOD, LD4_Pin);
-		vTaskDelay(pdMS_TO_TICKS(800));
+		HAL_GPIO_TogglePin(GPIOD, LD3_Pin);
+
+		BaseType_t buttonPressNotified = xTaskNotifyWait(0,0,NULL,pdMS_TO_TICKS(800));
+		if(buttonPressNotified)
+		{
+			HAL_GPIO_WritePin(GPIOD, LD3_Pin, GPIO_PIN_SET);
+			nextHandle = task_RedLEDHandle;
+			vTaskSuspend(NULL);
+		}
 
 	}
 }
@@ -88,8 +104,41 @@ static void Task3_HandleRedLED(void* parameters)
 	{
 		SEGGER_SYSVIEW_PrintfTarget("Toggle Red LED");
 		HAL_GPIO_TogglePin(GPIOD, LD5_Pin);
-		vTaskDelay(pdMS_TO_TICKS(1000));
+		BaseType_t buttonPressNotified = xTaskNotifyWait(0,0,NULL,pdMS_TO_TICKS(1000));
+		if(buttonPressNotified)
+		{
+			HAL_GPIO_WritePin(GPIOD, LD5_Pin, GPIO_PIN_SET);
+			nextHandle = NULL;
+			vTaskSuspend(NULL);
+		}
+	}
+}
 
+
+static void Task4_HandleButtonPress(void* parameters)
+{
+	nextHandle = task_GreenLEDHandle;
+	while(1)
+	{
+		uint8_t buttonPressed = HAL_GPIO_ReadPin(GPIOA, GPIO_PIN_0);
+		if(buttonPressed){
+			vTaskDelay(pdMS_TO_TICKS(200));
+			buttonPressed = HAL_GPIO_ReadPin(GPIOA, GPIO_PIN_0);
+			if(!buttonPressed)
+			{
+				if(nextHandle)
+				{
+					xTaskNotify(nextHandle, 0, eNoAction);
+				}
+				else{
+					vTaskResume(task_GreenLEDHandle);
+					vTaskResume(task_RedLEDHandle);
+					vTaskResume(task_OrangeLEDHandle);
+					nextHandle = task_GreenLEDHandle;
+				}
+			}
+		}
+		vTaskDelay(pdMS_TO_TICKS(10));
 	}
 }
 /* USER CODE END 0 */
@@ -130,31 +179,39 @@ int main(void)
 
   SEGGER_SYSVIEW_Conf();
   //SEGGER_SYSVIEW_Start();
-  TaskHandle_t task1_Handle, task2_Handle;
-  BaseType_t task1_ret, task2_ret, task3_ret;
+
+  BaseType_t task1_ret, task2_ret, task3_ret, task4_ret;
   task1_ret =  xTaskCreate( 	Task1_HandleGreenLED,
-  							"Task1_GREEN_LED",
+  								"Task1_GREEN_LED",
 								1000u,
 								NULL,
-								configMAX_PRIORITIES -1,
-								&task1_Handle );
+								configMAX_PRIORITIES -2,
+								&task_GreenLEDHandle );
   configASSERT(task1_ret == pdPASS);
 
   task2_ret =  xTaskCreate( 	Task2_HandleOrangeLED,
-  							"Task2_ORANGE_LED",
+  								"Task2_ORANGE_LED",
 								1000u,
 								NULL,
-								configMAX_PRIORITIES -1,
-								&task2_Handle );
+								configMAX_PRIORITIES -2,
+								&task_OrangeLEDHandle );
   configASSERT(task2_ret == pdPASS);
 
   task3_ret =  xTaskCreate( 	Task3_HandleRedLED,
-  							"Task3_RED_LED",
+  								"Task3_RED_LED",
 								1000u,
 								NULL,
-								configMAX_PRIORITIES -1,
-								&task2_Handle );
+								configMAX_PRIORITIES -2,
+								&task_RedLEDHandle );
   configASSERT(task3_ret == pdPASS);
+
+  task4_ret =  xTaskCreate( 	Task4_HandleButtonPress,
+    							"Task4_BUTTON_TASK",
+  								1000u,
+  								NULL,
+  								configMAX_PRIORITIES -1,
+  								&task4_Handle );
+    configASSERT(task4_ret == pdPASS);
 
   vTaskStartScheduler();
 
